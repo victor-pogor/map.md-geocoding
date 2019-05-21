@@ -1,0 +1,5 @@
+<RCC>
+    <qresource prefix="/plugins/map_md" >
+        <file>icon.png</file>
+    </qresource>
+</RCC>

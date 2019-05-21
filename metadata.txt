@@ -1,0 +1,39 @@
+# This file contains metadata for your plugin. Since 
+# version 2.0 of QGIS this is the proper way to supply 
+# information about a plugin. The old method of 
+# embedding metadata in __init__.py will 
+# is no longer supported since version 2.0.
+
+# This file should be included when you package your plugin.# Mandatory items:
+
+[general]
+name=MapMD
+qgisMinimumVersion=3.0
+description=This plugin uses Map.md API.
+version=0.1
+author=Victor Pogor
+email=victor.pogor@outlook.com
+
+about=This plugin uses Map.md API for street geocoding. Thanks to Simpals company for providing free and unlimited API.
+
+tracker=https://github.com/victor-pogor/map.md-geo-tool/issues
+repository=https://github.com/victor-pogor/map.md-geo-tool
+# End of mandatory metadata
+
+# Recommended items:
+
+# Uncomment the following line and add your changelog:
+# changelog=
+
+# Tags are comma separated with spaces allowed
+tags=python,map.md,point.md,point,simpals,qgis
+
+homepage=https://github.com/victor-pogor/map.md-geo-tool
+category=Plugins
+icon=icon.png
+# experimental flag
+experimental=True
+
+# deprecated flag (applies to the whole plugin, not just a single version)
+deprecated=False
+
