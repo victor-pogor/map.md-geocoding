@@ -1,4 +1,5 @@
 .vscode/
+__pycache__/
 apikey.txt
 command.bat
 README.html
