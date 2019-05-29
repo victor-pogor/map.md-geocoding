@@ -23,16 +23,25 @@
 """
 
 import os
+import csv
 
+# pylint: disable=import-error,no-name-in-module
 from PyQt5 import uic
 from PyQt5 import QtWidgets
+from PyQt5.QtWidgets import QFileDialog, QDialogButtonBox
 
-# This loads your .ui file so that PyQt can populate your plugin with the elements from Qt Designer
+from qgis.utils import iface
+# pylint: enable=no-name-in-module
+
+# This loads your .ui file so that PyQt can populate
+# your plugin with the elements from Qt Designer
 FORM_CLASS, _ = uic.loadUiType(os.path.join(
     os.path.dirname(__file__), 'map_md_dialog_base.ui'))
 
 
 class MapMdDialog(QtWidgets.QDialog, FORM_CLASS):
+    """ MapMdDialog class. """
+
     def __init__(self, parent=None):
         """Constructor."""
         super(MapMdDialog, self).__init__(parent)
@@ -42,3 +51,134 @@ class MapMdDialog(QtWidgets.QDialog, FORM_CLASS):
         # http://qt-project.org/doc/qt-4.8/designer-using-a-ui-file.html
         # #widgets-and-dialogs-with-auto-connect
         self.setupUi(self)
+
+        self.button_box.button(QDialogButtonBox.Ok).setEnabled(False)
+
+        self.input_filename.textChanged.connect(self.is_ready_to_geocode)
+        self.output_spatialite_filename.textChanged.connect(
+            self.is_ready_to_geocode)
+        self.output_notfound_filename.textChanged.connect(
+            self.is_ready_to_geocode)
+        self.api_key.textChanged.connect(self.is_ready_to_geocode)
+        self.street_field1.currentTextChanged.connect(self.is_ready_to_geocode)
+
+        self.browse_infile.clicked.connect(self.browse_infile_dialog)
+        self.browse_spatialite.clicked.connect(
+            self.browse_spatialite_file_dialog)
+        self.browse_notfound.clicked.connect(
+            self.browse_notfound_file_dialog)
+
+    def browse_infile_dialog(self):
+        """ Browse input CSV file dialog """
+        input_file_name, _ = QFileDialog.getOpenFileName(
+            None, "Address CSV Input File",
+            self.input_filename.displayText(),
+            "CSV File (*.csv *.txt)")
+        if input_file_name and len(input_file_name) > 4:
+            abspath = os.path.abspath(input_file_name)
+            # Se seteaza calea fisierului de intrare
+            self.input_filename.setText(abspath)
+            # Se seteaza calea spre fisierul de iesire (SpatiaLite)
+            # Se inlocuieste extensia '.csv' cu '.sqlite'
+            self.output_spatialite_filename.setText(
+                os.path.join(
+                    os.path.dirname(abspath), os.path.splitext(
+                        os.path.basename(abspath))[0] + '.sqlite'))
+            # Se seteaza calea spre fisierul CSV cu adrese neidentificate
+            self.output_notfound_filename.setText(
+                os.path.join(os.path.dirname(abspath), 'notfound.csv'))
+
+            combolist = [self.street_field1, self.street_field2,
+                         self.house_number_field, self.locality_field,
+                         self.district_field]
+            for box in combolist:
+                box.clear()
+                box.addItem("(none)")
+                box.setCurrentIndex(0)
+
+            header = read_csv_header(abspath)
+            if header is None:
+                return
+
+            for index in header:
+                for box in combolist:
+                    box.addItem(index)
+
+    def browse_spatialite_file_dialog(self):
+        """ Browse SpatiaLite file dialog. """
+        output_file_name, _ = QFileDialog.getSaveFileName(
+            None, "Output SpatiaLite File",
+            self.output_spatialite_filename.displayText(),
+            "SpatiaLite File (*.sqlite *.db)")
+        if output_file_name:
+            self.output_spatialite_filename.setText(
+                os.path.abspath(output_file_name))
+
+    def browse_notfound_file_dialog(self):
+        """ Browse Not Found file dialog. """
+        output_file_name, _ = QFileDialog.getSaveFileName(
+            None, "Output SpatiaLite File",
+            self.output_notfound_filename.displayText(),
+            "SpatiaLite File (*.sqlite *.db)")
+        if output_file_name:
+            self.output_notfound_filename.setText(
+                os.path.abspath(output_file_name))
+
+    def is_ready_to_geocode(self):
+        """ Enable or disable OK button whether all
+        required field are filled. """
+        is_ready = self.input_filename.displayText() \
+            and self.output_spatialite_filename.displayText() \
+            and self.output_notfound_filename.displayText() \
+            and self.api_key.displayText() \
+            and self.street_field1.currentIndex() > 0
+
+        self.button_box.button(QDialogButtonBox.Ok).setEnabled(bool(is_ready))
+
+# --------------------------------------------------------
+#    Utility Functions
+# --------------------------------------------------------
+
+
+def read_csv_header(filename):
+    """ Read CSV header. """
+    try:
+        infile = open(filename, 'r', encoding='utf-8')
+    except IOError:
+        iface.messageBar().pushCritical(
+            "Input CSV File",
+            "Failure opening " + filename)
+        return None
+
+    try:
+        dialect = csv.Sniffer().sniff(infile.read(4096))
+    except UnicodeDecodeError:
+        iface.messageBar().pushCritical(
+            "Input CSV File",
+            "Bad CSV file - verify that your delimiters are consistent")
+        return None
+
+    infile.seek(0)
+    reader = csv.reader(infile, dialect)
+
+    # Decode from UTF-8 characters
+    try:
+        header = next(reader)
+        header = [field for field in header]
+    except IOError:
+        iface.messageBar().pushCritical(
+            "Input CSV File",
+            "Invalid character in file - verify your file " +
+            "uses UTF-8 character encoding")
+        return None
+
+    del reader
+    del infile
+
+    if not header:
+        iface.messageBar().pushInfo(
+            "Input CSV File",
+            filename + " does not appear to be a CSV file")
+        return None
+
+    return header
