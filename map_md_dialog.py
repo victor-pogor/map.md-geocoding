@@ -23,15 +23,14 @@
 """
 
 import os
-import csv
 
 # pylint: disable=import-error,no-name-in-module
 from PyQt5 import uic
 from PyQt5 import QtWidgets
 from PyQt5.QtWidgets import QFileDialog, QDialogButtonBox
-
-from qgis.utils import iface
 # pylint: enable=no-name-in-module
+
+from .map_md_utils import read_csv_header
 
 # This loads your .ui file so that PyQt can populate
 # your plugin with the elements from Qt Designer
@@ -134,51 +133,3 @@ class MapMdDialog(QtWidgets.QDialog, FORM_CLASS):
             and self.street_field1.currentIndex() > 0
 
         self.button_box.button(QDialogButtonBox.Ok).setEnabled(bool(is_ready))
-
-# --------------------------------------------------------
-#    Utility Functions
-# --------------------------------------------------------
-
-
-def read_csv_header(filename):
-    """ Read CSV header. """
-    try:
-        infile = open(filename, 'r', encoding='utf-8')
-    except IOError:
-        iface.messageBar().pushCritical(
-            "Input CSV File",
-            "Failure opening " + filename)
-        return None
-
-    try:
-        dialect = csv.Sniffer().sniff(infile.read(4096))
-    except UnicodeDecodeError:
-        iface.messageBar().pushCritical(
-            "Input CSV File",
-            "Bad CSV file - verify that your delimiters are consistent")
-        return None
-
-    infile.seek(0)
-    reader = csv.reader(infile, dialect)
-
-    # Decode from UTF-8 characters
-    try:
-        header = next(reader)
-        header = [field for field in header]
-    except IOError:
-        iface.messageBar().pushCritical(
-            "Input CSV File",
-            "Invalid character in file - verify your file " +
-            "uses UTF-8 character encoding")
-        return None
-
-    del reader
-    del infile
-
-    if not header:
-        iface.messageBar().pushInfo(
-            "Input CSV File",
-            filename + " does not appear to be a CSV file")
-        return None
-
-    return header
