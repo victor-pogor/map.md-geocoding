@@ -30,7 +30,7 @@ from PyQt5 import QtWidgets
 from PyQt5.QtWidgets import QFileDialog, QDialogButtonBox
 # pylint: enable=no-name-in-module
 
-from .map_md_utils import read_csv_header
+from .map_md_utils import read_csv
 
 # This loads your .ui file so that PyQt can populate
 # your plugin with the elements from Qt Designer
@@ -95,13 +95,17 @@ class MapMdDialog(QtWidgets.QDialog, FORM_CLASS):
                 box.addItem("(none)")
                 box.setCurrentIndex(0)
 
-            header = read_csv_header(abspath)
-            if header is None:
-                return
+            try:
+                header = next(read_csv(abspath))
+                header = [field for field in header]
+                if header is None:
+                    return
 
-            for index in header:
-                for box in combolist:
-                    box.addItem(index)
+                for index in header:
+                    for box in combolist:
+                        box.addItem(index)
+            except StopIteration:
+                pass
 
     def browse_spatialite_file_dialog(self):
         """ Browse SpatiaLite file dialog. """

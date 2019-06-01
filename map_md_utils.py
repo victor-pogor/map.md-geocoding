@@ -23,47 +23,30 @@
 """
 
 import csv
+
+
 from qgis.utils import iface # pylint: disable=import-error
 
-def read_csv_header(filename):
-    """ Read CSV header. """
+def read_csv(filename):
+    """ Read CSV file. """
     try:
-        infile = open(filename, 'r', encoding='utf-8')
+        with open(filename, 'r', encoding='utf-8') as csvfile:
+            # Identify CSV dialect (delimiter)
+            dialect = csv.Sniffer().sniff(csvfile.read(4096))
+            csvfile.seek(0)
+            reader = csv.reader(csvfile, dialect)
+
+            for row in reader:
+                yield row
     except IOError:
         iface.messageBar().pushCritical(
             "Input CSV File",
             "Failure opening " + filename)
-        return None
-
-    try:
-        dialect = csv.Sniffer().sniff(infile.read(4096))
     except UnicodeDecodeError:
         iface.messageBar().pushCritical(
             "Input CSV File",
-            "Bad CSV file - verify that your delimiters are consistent")
-        return None
-
-    infile.seek(0)
-    reader = csv.reader(infile, dialect)
-
-    # Decode from UTF-8 characters
-    try:
-        header = next(reader)
-        header = [field for field in header]
-    except IOError:
+            "Bad CSV file - Unicode decode error")
+    except csv.Error:
         iface.messageBar().pushCritical(
             "Input CSV File",
-            "Invalid character in file - verify your file " +
-            "uses UTF-8 character encoding")
-        return None
-
-    del reader
-    del infile
-
-    if not header:
-        iface.messageBar().pushInfo(
-            "Input CSV File",
-            filename + " does not appear to be a CSV file")
-        return None
-
-    return header
+            "Bad CSV file - verify that your delimiters are consistent")
