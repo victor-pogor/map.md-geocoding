@@ -21,15 +21,19 @@
  *                                                                         *
  ***************************************************************************/
 """
+
+import os.path
+
+# pylint: disable=import-error,no-name-in-module
 from PyQt5.QtCore import QSettings, QTranslator, qVersion, QCoreApplication
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QAction
+# pylint: enable=import-error,no-name-in-module
 
 # Initialize Qt resources from file resources.py
-from .resources import *
+from .resources import *  # pylint: disable=wildcard-import,unused-wildcard-import
 # Import the code for the dialog
 from .map_md_dialog import MapMdDialog
-import os.path
 
 
 class MapMd:
@@ -84,18 +88,17 @@ class MapMd:
         # noinspection PyTypeChecker,PyArgumentList,PyCallByClass
         return QCoreApplication.translate('MapMd', message)
 
-
     def add_action(
-        self,
-        icon_path,
-        text,
-        callback,
-        enabled_flag=True,
-        add_to_menu=True,
-        add_to_toolbar=True,
-        status_tip=None,
-        whats_this=None,
-        parent=None):
+            self,
+            icon_path,
+            text,
+            callback,
+            enabled_flag=True,
+            add_to_menu=True,
+            add_to_toolbar=True,
+            status_tip=None,
+            whats_this=None,
+            parent=None):
         """Add a toolbar icon to the toolbar.
 
         :param icon_path: Path to the icon for this action. Can be a resource
@@ -172,7 +175,6 @@ class MapMd:
         # will be set False in run()
         self.first_start = True
 
-
     def unload(self):
         """Removes the plugin menu item and icon from QGIS GUI."""
         for action in self.actions:
@@ -181,15 +183,15 @@ class MapMd:
                 action)
             self.iface.removeToolBarIcon(action)
 
-
     def run(self):
         """Run method that performs all the real work"""
 
         # Create the dialog with elements (after translation) and keep reference
-        # Only create GUI ONCE in callback, so that it will only load when the plugin is started
-        if self.first_start == True:
+        # Only create GUI ONCE in callback, so that it will only
+        # load when the plugin is started
+        if self.first_start == True: # pylint: disable=singleton-comparison
             self.first_start = False
-            self.dlg = MapMdDialog()
+            self.dlg = MapMdDialog() # pylint: disable=attribute-defined-outside-init
 
         # show the dialog
         self.dlg.show()
