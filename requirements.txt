@@ -1,0 +1,5 @@
+autopep8
+pb_tool
+pylint
+python3-sphinx
+PyQt5

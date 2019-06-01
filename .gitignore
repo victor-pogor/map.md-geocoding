@@ -1,6 +1,10 @@
 .vscode/
 __pycache__/
+qgis-env/
+help/build/
+
 apikey.txt
 command.bat
 README.html
 README.txt
+resources.py
