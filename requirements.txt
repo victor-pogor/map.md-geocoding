@@ -1,5 +1,8 @@
 autopep8
 pb_tool
+nose
 pylint
-python3-sphinx
-PyQt5
+pyqt5
+requests
+rope
+sphinx

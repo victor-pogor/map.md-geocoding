@@ -24,16 +24,15 @@
 
 import os.path
 
-# pylint: disable=import-error,no-name-in-module
 from PyQt5.QtCore import QSettings, QTranslator, qVersion, QCoreApplication
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QAction
-# pylint: enable=import-error,no-name-in-module
 
 # Initialize Qt resources from file resources.py
 from .resources import *  # pylint: disable=wildcard-import,unused-wildcard-import
 # Import the code for the dialog
 from .map_md_dialog import MapMdDialog
+from .map_md_utils import MapMdUtils
 
 
 class MapMd:
@@ -189,9 +188,9 @@ class MapMd:
         # Create the dialog with elements (after translation) and keep reference
         # Only create GUI ONCE in callback, so that it will only
         # load when the plugin is started
-        if self.first_start == True: # pylint: disable=singleton-comparison
+        if self.first_start == True:  # pylint: disable=singleton-comparison
             self.first_start = False
-            self.dlg = MapMdDialog() # pylint: disable=attribute-defined-outside-init
+            self.dlg = MapMdDialog()  # pylint: disable=attribute-defined-outside-init
 
         # show the dialog
         self.dlg.show()
@@ -199,6 +198,22 @@ class MapMd:
         result = self.dlg.exec_()
         # See if OK was pressed
         if result:
-            # Do something useful here - delete the line containing pass and
-            # substitute with your code.
-            pass
+            # Init variables
+            api_key = self.dlg.api_key.displayText()
+            street1_index = self.dlg.street_field1.currentIndex() - 1
+            street2_index = self.dlg.street_field2.currentIndex() - 1
+            house_number_index = self.dlg.house_number_field.currentIndex() - 1
+            locality_index = self.dlg.locality_field.currentIndex() - 1
+
+            input_filename = self.dlg.input_filename.displayText()
+            output_filename = self.dlg.output_spatialite_filename.displayText()
+            notfound_filename = self.dlg.output_notfound_filename.displayText()
+
+            map_md_utils = MapMdUtils(input_filename, output_filename,
+                                      notfound_filename, api_key,
+                                      street1_index, street2_index,
+                                      house_number_index, locality_index,
+                                      )
+
+            # Geocoding CSV rows
+            map_md_utils.geocode()
