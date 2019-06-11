@@ -27,6 +27,9 @@ import codecs
 import sqlite3
 import urllib.parse
 import requests
+import shapely
+
+from shapely.geometry import shape
 
 # pylint: disable=import-error
 from PyQt5.QtCore import Qt
@@ -34,7 +37,7 @@ from PyQt5.QtWidgets import QProgressBar
 from qgis.utils import iface
 from qgis.core import QgsDataSourceUri, Qgis
 # pylint: enable=import-error
-# from qgis.core import QgsMessageLog  # pylint: disable=import-error
+from qgis.core import QgsMessageLog  # pylint: disable=import-error
 
 
 class MapMdUtils:
@@ -91,7 +94,7 @@ class MapMdUtils:
                 "Input CSV File",
                 "Bad CSV file - verify that your delimiters are consistent")
 
-    def __write_notfound_street_to_csv(self, line):
+    def __write_notfound_street_to_csv(self, row):
         """ Write not found street to CSV file.
 
         param line: Line to be written in CSV file.
@@ -102,7 +105,10 @@ class MapMdUtils:
             csv_writter = csv.writer(
                 csvfile, delimiter=',',
                 quotechar='"', quoting=csv.QUOTE_MINIMAL)
-            csv_writter.writerow(line)
+            csv_writter.writerow(row)
+
+        QgsMessageLog.logMessage(
+            "Nu a fost geocodificat rândul CSV: %s" % ','.join(row))
 
     def __init_spatialite_db(self):
         """ Init SpatiaLite database."""
@@ -123,6 +129,10 @@ class MapMdUtils:
             cur.execute("PRAGMA table_info('%s');" % self.__table_name)
             db_columns = cur.fetchall()
             db_columns = (x[1] for x in db_columns)
+            db_columns = [self.__quote_identifier(x) for x in db_columns]
+
+            QgsMessageLog.logMessage(','.join(db_columns))
+            QgsMessageLog.logMessage(','.join(self.__header))
 
             for column in self.__header:
                 # Se adauga coloanele care nu au existat anterior
@@ -161,7 +171,7 @@ class MapMdUtils:
             # Insert it.
             sql = """INSERT INTO point_geometry
                     (%s, Geometry) VALUES
-                    (%s, GeomFromText('POINT(%s)', 4326));""" % \
+                    (%s, GeomFromText('%s', 4326));""" % \
                 (
                     ','.join(self.__header),
                     ','.join([self.__quote_identifier(item)
@@ -221,15 +231,23 @@ class MapMdUtils:
 
         return "\"" + encodable.replace("\"", "\"\"") + "\""
 
-    def __search_street(self, street, locality):
+    def __search_street(self, row, street1=True):
         """ Map.md search street method.
 
-        param api_key: The Map.md API-key.
-        type api_key: str
+        param row: Row list.
+        type row: list of str
 
-        :return: :class:`Response <Response>` object
-        :rtype: requests.Response
+        param row: Check whether street to be searched is street1.
+            Otherwise, street to be searched is street2
+        type row: bool
+
+        :return: False or JSON
+        :rtype: dict of str
         """
+
+        locality = row[self.__locality_index]
+        street = row[self.__street1_index] if street1 \
+            else row[self.__street2_index]
 
         r = requests.get(
             "https://map.md/api/companies/webmap/search_street?" +
@@ -237,29 +255,61 @@ class MapMdUtils:
                                   urllib.parse.quote(street)),
             auth=(self.__api_key, ""))
 
-        return r
+        if not r or not r.json():
+            self.__write_notfound_street_to_csv(row)
+            return False
+        return r.json()
 
-    def __search_street_with_house_number(self, street_id, house_number):
+    def __get_street(self, street_id, row):
+        """ Map.md get street method.
+
+        param street_id: The Map.md street id.
+        type street_id: int
+
+        param row: Row list.
+        type row: list of str
+
+        :return: False or JSON
+        :rtype: dict of str
+        """
+
+        locality = row[self.__locality_index]
+
+        r = requests.get(
+            "https://map.md/api/companies/webmap/get_street?" +
+            "id=%s&location=%s" % (urllib.parse.quote(street_id),
+                                   urllib.parse.quote(locality)),
+            auth=(self.__api_key, ""))
+
+        if not r or not r.json():
+            self.__write_notfound_street_to_csv(row)
+            return False
+        return r.json()
+
+    def __search_street_with_house_number(self, street_id, row):
         """ Map.md search street with house number method.
 
         param street_id: The street id that needs to be searched.
         type street_id: int
 
-        param house_number: The house number of the street that
-            needs to be searched.
-        type house_number: str
+        param row: Row list.
+        type row: list of str
 
-        :return: :class:`Response <Response>` object
-        :rtype: requests.Response
+        :return: False or JSON
+        :rtype: dict of str
         """
 
+        house_number = row[self.__house_number_index]
         r = requests.get(
             "https://map.md/api/companies/webmap/get_street?" +
             "id=%s&number=%s" % (urllib.parse.quote(street_id),
                                  urllib.parse.quote(house_number)),
             auth=(self.__api_key, ""))
 
-        return r
+        if not r or not r.json():
+            self.__write_notfound_street_to_csv(row)
+            return False
+        return r.json()
 
     def read_csv(self):
         """ Read CSV file. """
@@ -313,22 +363,53 @@ class MapMdUtils:
 
                 elif self.__street2_index > -1 and \
                         row[self.__street2_index]:
-                    print("str1 + str2 + loc")
-                    # de folosit ceva biblioteci pentru calcularea intersectiei
+
+                    # Se cauta strada1 pentru a obtine identificatorul ei
+                    r1 = self.__search_street(row)
+
+                    # Se cauta strada2 pentru a obtine identificatorul ei
+                    r2 = self.__search_street(row, street1=False)
+
+                    # Verificare strada1 si strada2
+                    if not r1 or not r2:
+                        continue
+
+                    # Se obtine datele despre strada1
+                    r1 = self.__get_street(r1[0]['id'], row)
+                    r2 = self.__get_street(r2[0]['id'], row)
+
+                    if not r1 or not r2:
+                        continue
+
+                    r1_geo_json = r1['geo_json']
+                    r2_geo_json = r2['geo_json']
+
+                    s1 = shape(r1_geo_json)
+                    s2 = shape(r2_geo_json)
+
+                    if not s1.intersects(s2):
+                        self.__write_notfound_street_to_csv(row)
+                        continue
+
+                    geometry = s1.intersection(s2)
+
+                    # In cazul ca se identifica MultiPoint,
+                    # se ia primul Point in consideratie
+                    if isinstance(geometry,
+                                  shapely.geometry.multipoint.MultiPoint):
+                        geometry = geometry[0]
+
+                    self.__add_row_to_db(row, geometry.wkt)
 
                 elif self.__house_number_index > -1 and \
                         row[self.__house_number_index]:
-                    r = self.__search_street(
-                        row[self.__street1_index],
-                        row[self.__locality_index])
 
-                    if not r or not r.json():
-                        self.__write_notfound_street_to_csv(row)
+                    r = self.__search_street(row)
+
+                    if not r:
                         continue
-                    r = r.json()
 
                     # Se obtine lista cu numerele caselor adresei solicitate
-                    # QgsMessageLog.logMessage(row[self.__street1_index]+str(r))
                     buildings = r[0]['buildings']
 
                     # Daca numarul casei nu se gaseste in lista,
@@ -337,17 +418,13 @@ class MapMdUtils:
                         self.__write_notfound_street_to_csv(row)
                         continue
 
-                    r = self.__search_street_with_house_number(
-                        r[0]['id'],
-                        row[self.__house_number_index])
+                    r = self.__search_street_with_house_number(r[0]['id'], row)
 
-                    if not r or not r.json():
-                        self.__write_notfound_street_to_csv(row)
+                    if not r:
                         continue
-                    r = r.json()
 
-                    geometry = "%s %s" % (r['point']['lon'],
-                                          r['point']['lat'])
+                    geometry = "POINT(%s %s)" % (r['point']['lon'],
+                                                 r['point']['lat'])
                     self.__add_row_to_db(row, geometry)
 
                 else:
