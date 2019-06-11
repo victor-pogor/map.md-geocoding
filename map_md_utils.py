@@ -26,6 +26,7 @@ import csv
 import codecs
 import sqlite3
 import urllib.parse
+import re
 import requests
 import shapely
 
@@ -100,7 +101,6 @@ class MapMdUtils:
         param line: Line to be written in CSV file.
         type line: str
         """
-
         with open(self.__notfound_filename, mode='a') as csvfile:
             csv_writter = csv.writer(
                 csvfile, delimiter=',',
@@ -112,7 +112,6 @@ class MapMdUtils:
 
     def __init_spatialite_db(self):
         """ Init SpatiaLite database."""
-
         with sqlite3.connect(self.__output_filename) as conn:
             conn.enable_load_extension(True)
             conn.load_extension("mod_spatialite")
@@ -130,9 +129,6 @@ class MapMdUtils:
             db_columns = cur.fetchall()
             db_columns = (x[1] for x in db_columns)
             db_columns = [self.__quote_identifier(x) for x in db_columns]
-
-            QgsMessageLog.logMessage(','.join(db_columns))
-            QgsMessageLog.logMessage(','.join(self.__header))
 
             for column in self.__header:
                 # Se adauga coloanele care nu au existat anterior
@@ -162,7 +158,6 @@ class MapMdUtils:
         param geometry: Point geometry.
         type geometry: str
         """
-
         with sqlite3.connect(self.__output_filename) as conn:
             conn.enable_load_extension(True)
             conn.load_extension("mod_spatialite")
@@ -178,7 +173,6 @@ class MapMdUtils:
                               for item in row]),
                     geometry
                 )
-            # QgsMessageLog.logMessage(sql)
             cur.execute(sql)
 
     def __add_spatialite_layer_to_qgis(self):
@@ -216,9 +210,7 @@ class MapMdUtils:
         return: Return parsed string.
         rtype: str
         """
-
         encodable = s.encode("utf-8", errors).decode("utf-8")
-
         nul_index = encodable.find("\x00")
 
         if nul_index >= 0:
@@ -231,23 +223,19 @@ class MapMdUtils:
 
         return "\"" + encodable.replace("\"", "\"\"") + "\""
 
-    def __search_street(self, row, street1=True):
+    def __map_md_search_street(self, row, street):
         """ Map.md search street method.
 
         param row: Row list.
         type row: list of str
 
-        param row: Check whether street to be searched is street1.
-            Otherwise, street to be searched is street2
-        type row: bool
+        param street: Street.
+        type street: str
 
         :return: False or JSON
         :rtype: dict of str
         """
-
         locality = row[self.__locality_index]
-        street = row[self.__street1_index] if street1 \
-            else row[self.__street2_index]
 
         r = requests.get(
             "https://map.md/api/companies/webmap/search_street?" +
@@ -260,7 +248,7 @@ class MapMdUtils:
             return False
         return r.json()
 
-    def __get_street(self, street_id, row):
+    def __map_md_get_street(self, street_id, row):
         """ Map.md get street method.
 
         param street_id: The Map.md street id.
@@ -272,9 +260,7 @@ class MapMdUtils:
         :return: False or JSON
         :rtype: dict of str
         """
-
         locality = row[self.__locality_index]
-
         r = requests.get(
             "https://map.md/api/companies/webmap/get_street?" +
             "id=%s&location=%s" % (urllib.parse.quote(street_id),
@@ -286,20 +272,19 @@ class MapMdUtils:
             return False
         return r.json()
 
-    def __search_street_with_house_number(self, street_id, row):
+    def __map_md_search_street_with_house_number(self, row, street_id,
+                                                 house_number):
         """ Map.md search street with house number method.
-
-        param street_id: The street id that needs to be searched.
-        type street_id: int
 
         param row: Row list.
         type row: list of str
 
+        param house_number: House number.
+        type house_number: str
+
         :return: False or JSON
         :rtype: dict of str
         """
-
-        house_number = row[self.__house_number_index]
         r = requests.get(
             "https://map.md/api/companies/webmap/get_street?" +
             "id=%s&number=%s" % (urllib.parse.quote(street_id),
@@ -310,6 +295,94 @@ class MapMdUtils:
             self.__write_notfound_street_to_csv(row)
             return False
         return r.json()
+
+    def __geocode_street_and_house_number(self, row, street, house_number):
+        """ Geocode street1 and house number.
+
+        param row: Row list.
+        type row: list of str
+
+        param street: Street.
+        type street: str
+
+        param house_number: House number.
+        type house_number: str
+
+        :return: Return bool.
+        :rtype: bool
+        """
+        r = self.__map_md_search_street(row, street)
+        if not r:
+            return False
+
+        # Se obtine lista cu numerele caselor adresei solicitate
+        buildings = r[0]['buildings']
+
+        # Daca numarul casei nu se gaseste in lista,
+        # nu se indeplineste cel de-al doilea request
+        if house_number not in buildings:
+            self.__write_notfound_street_to_csv(row)
+            return False
+
+        r = self.__map_md_search_street_with_house_number(
+            row, r[0]['id'], house_number)
+        if not r:
+            return False
+
+        geometry = "POINT(%s %s)" % (r['point']['lon'],
+                                     r['point']['lat'])
+        self.__add_row_to_db(row, geometry)
+
+    def __geocode_street1_and_street2(self, row, street1, street2):
+        """ Geocode street1 and street2.
+
+        param row: Row list.
+        type row: list of str
+
+        param street: Street1.
+        type street: str
+
+        param street: Street2.
+        type street: str
+
+        :return: Return bool.
+        :rtype: bool
+        """
+        # Se cauta strada1 pentru a obtine identificatorul ei
+        r1 = self.__map_md_search_street(row, street1)
+
+        # Se cauta strada2 pentru a obtine identificatorul ei
+        r2 = self.__map_md_search_street(row, street2)
+
+        # Verificare strada1 si strada2
+        if not r1 or not r2:
+            return False
+
+        # Se obtine datele despre strada1
+        r1 = self.__map_md_get_street(r1[0]['id'], row)
+        r2 = self.__map_md_get_street(r2[0]['id'], row)
+        if not r1 or not r2:
+            return False
+
+        r1_geo_json = r1['geo_json']
+        r2_geo_json = r2['geo_json']
+
+        s1 = shape(r1_geo_json)
+        s2 = shape(r2_geo_json)
+
+        if not s1.intersects(s2):
+            self.__write_notfound_street_to_csv(row)
+            return False
+
+        geometry = s1.intersection(s2)
+
+        # In cazul ca se identifica MultiPoint,
+        # se ia primul Point in consideratie
+        if isinstance(geometry,
+                      shapely.geometry.multipoint.MultiPoint):
+            geometry = geometry[0]
+
+        self.__add_row_to_db(row, geometry.wkt)
 
     def read_csv(self):
         """ Read CSV file. """
@@ -348,6 +421,8 @@ class MapMdUtils:
         iface.messageBar().pushWidget(progressMessageBar, Qgis.Info)
         i = 0
 
+        pattern = r"^((?:[a-z0-9ăîșțâ]+[\., ]+)+)(\d{1,3}(?:[\/ ]?\w{1,2})?)$"
+
         try:
             if self.__street1_index == -1 and self.__locality_index == -1:
                 raise ValueError
@@ -364,73 +439,49 @@ class MapMdUtils:
                 elif self.__street2_index > -1 and \
                         row[self.__street2_index]:
 
-                    # Se cauta strada1 pentru a obtine identificatorul ei
-                    r1 = self.__search_street(row)
+                    QgsMessageLog.\
+                        logMessage("Street1 + Street2 + Locality")
 
-                    # Se cauta strada2 pentru a obtine identificatorul ei
-                    r2 = self.__search_street(row, street1=False)
+                    geocode_street1_and_street2 = \
+                        self.__geocode_street1_and_street2(
+                            row,
+                            row[self.__street1_index],
+                            row[self.__street2_index])
 
-                    # Verificare strada1 si strada2
-                    if not r1 or not r2:
+                    if not geocode_street1_and_street2:
                         continue
-
-                    # Se obtine datele despre strada1
-                    r1 = self.__get_street(r1[0]['id'], row)
-                    r2 = self.__get_street(r2[0]['id'], row)
-
-                    if not r1 or not r2:
-                        continue
-
-                    r1_geo_json = r1['geo_json']
-                    r2_geo_json = r2['geo_json']
-
-                    s1 = shape(r1_geo_json)
-                    s2 = shape(r2_geo_json)
-
-                    if not s1.intersects(s2):
-                        self.__write_notfound_street_to_csv(row)
-                        continue
-
-                    geometry = s1.intersection(s2)
-
-                    # In cazul ca se identifica MultiPoint,
-                    # se ia primul Point in consideratie
-                    if isinstance(geometry,
-                                  shapely.geometry.multipoint.MultiPoint):
-                        geometry = geometry[0]
-
-                    self.__add_row_to_db(row, geometry.wkt)
 
                 elif self.__house_number_index > -1 and \
                         row[self.__house_number_index]:
 
-                    r = self.__search_street(row)
+                    QgsMessageLog.\
+                        logMessage("Street1 + House number + Locality")
 
-                    if not r:
+                    geocode_street_and_house_number = \
+                        self.__geocode_street_and_house_number(
+                            row,
+                            row[self.__street1_index],
+                            row[self.__house_number_index])
+                    if not geocode_street_and_house_number:
                         continue
 
-                    # Se obtine lista cu numerele caselor adresei solicitate
-                    buildings = r[0]['buildings']
-
-                    # Daca numarul casei nu se gaseste in lista,
-                    # nu se indeplineste cel de-al doilea request
-                    if row[self.__house_number_index] not in buildings:
+                else:
+                    QgsMessageLog.logMessage("Street1 + Locality")
+                    match = re.search(pattern,
+                                      row[self.__street1_index],
+                                      re.IGNORECASE | re.UNICODE)
+                    if not match:
                         self.__write_notfound_street_to_csv(row)
                         continue
 
-                    r = self.__search_street_with_house_number(r[0]['id'], row)
+                    street = match.group(1).replace(',', '').strip()
+                    house_number = match.group(2).strip()
 
-                    if not r:
+                    geocode_street_and_house_number = \
+                        self.__geocode_street_and_house_number(
+                            row, street, house_number)
+                    if not geocode_street_and_house_number:
                         continue
-
-                    geometry = "POINT(%s %s)" % (r['point']['lon'],
-                                                 r['point']['lat'])
-                    self.__add_row_to_db(row, geometry)
-
-                else:
-                    print("str1 + loc")
-                    # prin Regex extragerea casei si
-                    # fix ca si in if de mai sus
 
                 i += 1
                 progress.setValue(i)
