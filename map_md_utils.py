@@ -108,7 +108,8 @@ class MapMdUtils:
             csv_writter.writerow(row)
 
         QgsMessageLog.logMessage(
-            "Nu a fost geocodificat rândul CSV: %s" % ','.join(row))
+            "Nu a fost geocodificat rândul CSV: %s" % ','.join(row),
+            level=Qgis.Warning)
 
     def __init_spatialite_db(self):
         """ Init SpatiaLite database."""
@@ -440,7 +441,8 @@ class MapMdUtils:
                         row[self.__street2_index]:
 
                     QgsMessageLog.\
-                        logMessage("Street1 + Street2 + Locality")
+                        logMessage("Street1 + Street2 + Locality",
+                                   level=Qgis.Info)
 
                     geocode_street1_and_street2 = \
                         self.__geocode_street1_and_street2(
@@ -455,7 +457,8 @@ class MapMdUtils:
                         row[self.__house_number_index]:
 
                     QgsMessageLog.\
-                        logMessage("Street1 + House number + Locality")
+                        logMessage("Street1 + House number + Locality",
+                                   level=Qgis.Info)
 
                     geocode_street_and_house_number = \
                         self.__geocode_street_and_house_number(
@@ -466,7 +469,8 @@ class MapMdUtils:
                         continue
 
                 else:
-                    QgsMessageLog.logMessage("Street1 + Locality")
+                    QgsMessageLog.logMessage("Street1 + Locality",
+                                             level=Qgis.Info)
                     match = re.search(pattern,
                                       row[self.__street1_index],
                                       re.IGNORECASE | re.UNICODE)
