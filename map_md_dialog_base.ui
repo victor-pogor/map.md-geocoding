@@ -11,7 +11,7 @@
    </rect>
   </property>
   <property name="windowTitle">
-   <string>MapMD</string>
+   <string>Map.md Geocoding</string>
   </property>
   <widget class="QDialogButtonBox" name="button_box">
    <property name="enabled">
