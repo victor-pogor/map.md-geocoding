@@ -21,15 +21,22 @@
  *                                                                         *
  ***************************************************************************/
 """
+
+import os.path
+
 from PyQt5.QtCore import QSettings, QTranslator, qVersion, QCoreApplication
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QAction
 
+# pylint: disable=import-error
+from qgis.core import QgsApplication, QgsMessageLog
+# pylint: enable=import-error
+
 # Initialize Qt resources from file resources.py
-from .resources import *
+from .resources import *  # pylint: disable=wildcard-import,unused-wildcard-import
 # Import the code for the dialog
 from .map_md_dialog import MapMdDialog
-import os.path
+from .map_md_utils import MapMdUtils
 
 
 class MapMd:
@@ -63,11 +70,13 @@ class MapMd:
 
         # Declare instance attributes
         self.actions = []
-        self.menu = self.tr(u'&MapMD')
+        self.menu = self.tr(u'&Map.md Geocoding')
 
         # Check if plugin was started the first time in current QGIS session
         # Must be set in initGui() to survive plugin reloads
         self.first_start = None
+
+        self.task_manager = QgsApplication.taskManager()
 
     # noinspection PyMethodMayBeStatic
     def tr(self, message):
@@ -82,20 +91,19 @@ class MapMd:
         :rtype: QString
         """
         # noinspection PyTypeChecker,PyArgumentList,PyCallByClass
-        return QCoreApplication.translate('MapMd', message)
-
+        return QCoreApplication.translate('Map.md Geocoding', message)
 
     def add_action(
-        self,
-        icon_path,
-        text,
-        callback,
-        enabled_flag=True,
-        add_to_menu=True,
-        add_to_toolbar=True,
-        status_tip=None,
-        whats_this=None,
-        parent=None):
+            self,
+            icon_path,
+            text,
+            callback,
+            enabled_flag=True,
+            add_to_menu=True,
+            add_to_toolbar=True,
+            status_tip=None,
+            whats_this=None,
+            parent=None):
         """Add a toolbar icon to the toolbar.
 
         :param icon_path: Path to the icon for this action. Can be a resource
@@ -165,31 +173,30 @@ class MapMd:
         icon_path = ':/plugins/map_md/icon.png'
         self.add_action(
             icon_path,
-            text=self.tr(u'MapMD'),
+            text=self.tr(u'Map.md Geocoding'),
             callback=self.run,
             parent=self.iface.mainWindow())
 
         # will be set False in run()
         self.first_start = True
 
-
     def unload(self):
         """Removes the plugin menu item and icon from QGIS GUI."""
         for action in self.actions:
             self.iface.removePluginMenu(
-                self.tr(u'&MapMD'),
+                self.tr(u'&Map.md Geocoding'),
                 action)
             self.iface.removeToolBarIcon(action)
-
 
     def run(self):
         """Run method that performs all the real work"""
 
         # Create the dialog with elements (after translation) and keep reference
-        # Only create GUI ONCE in callback, so that it will only load when the plugin is started
-        if self.first_start == True:
+        # Only create GUI ONCE in callback, so that it will only
+        # load when the plugin is started
+        if self.first_start == True:  # pylint: disable=singleton-comparison
             self.first_start = False
-            self.dlg = MapMdDialog()
+            self.dlg = MapMdDialog()  # pylint: disable=attribute-defined-outside-init
 
         # show the dialog
         self.dlg.show()
@@ -197,6 +204,23 @@ class MapMd:
         result = self.dlg.exec_()
         # See if OK was pressed
         if result:
-            # Do something useful here - delete the line containing pass and
-            # substitute with your code.
-            pass
+            # Init variables
+            api_key = self.dlg.api_key.displayText()
+            street1_index = self.dlg.street_field1.currentIndex() - 1
+            street2_index = self.dlg.street_field2.currentIndex() - 1
+            house_number_index = self.dlg.house_number_field.currentIndex() - 1
+            locality_index = self.dlg.locality_field.currentIndex() - 1
+
+            input_filename = self.dlg.input_filename.displayText()
+            output_filename = self.dlg.output_spatialite_filename.displayText()
+            notfound_filename = self.dlg.output_notfound_filename.displayText()
+
+            map_md_utils = MapMdUtils(input_filename, output_filename,
+                                      notfound_filename, api_key,
+                                      street1_index, street2_index,
+                                      house_number_index, locality_index,
+                                      )
+
+            # Geocoding CSV rows
+            task_id = self.task_manager.addTask(map_md_utils)
+            QgsMessageLog.logMessage("Atribuită sarcină nr. %s" % str(task_id))
