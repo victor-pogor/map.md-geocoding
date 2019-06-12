@@ -28,6 +28,10 @@ from PyQt5.QtCore import QSettings, QTranslator, qVersion, QCoreApplication
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QAction
 
+# pylint: disable=import-error
+from qgis.core import QgsApplication, QgsMessageLog
+# pylint: enable=import-error
+
 # Initialize Qt resources from file resources.py
 from .resources import *  # pylint: disable=wildcard-import,unused-wildcard-import
 # Import the code for the dialog
@@ -71,6 +75,8 @@ class MapMd:
         # Check if plugin was started the first time in current QGIS session
         # Must be set in initGui() to survive plugin reloads
         self.first_start = None
+
+        self.task_manager = QgsApplication.taskManager()
 
     # noinspection PyMethodMayBeStatic
     def tr(self, message):
@@ -216,4 +222,5 @@ class MapMd:
                                       )
 
             # Geocoding CSV rows
-            map_md_utils.geocode()
+            task_id = self.task_manager.addTask(map_md_utils)
+            QgsMessageLog.logMessage("Atribuită sarcină nr. %s" % str(task_id))

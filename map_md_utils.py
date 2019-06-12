@@ -33,15 +33,13 @@ import shapely
 from shapely.geometry import shape
 
 # pylint: disable=import-error
-from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QProgressBar
 from qgis.utils import iface
-from qgis.core import QgsDataSourceUri, Qgis
+from qgis.core import (QgsDataSourceUri, Qgis,
+                       QgsTask, QgsMessageLog)
 # pylint: enable=import-error
-from qgis.core import QgsMessageLog  # pylint: disable=import-error
 
 
-class MapMdUtils:
+class MapMdUtils(QgsTask):
     """ MapMdUtils Class.
 
     param input_filename: Input CSV absolute path.
@@ -73,6 +71,7 @@ class MapMdUtils:
                  notfound_filename="", api_key="",
                  street1_index=-1, street2_index=-1,
                  house_number_index=-1, locality_index=-1):
+        super().__init__("Geocodificarea adreselor", QgsTask.CanCancel)
         self.__api_key = api_key
         self.__street1_index = street1_index
         self.__street2_index = street2_index
@@ -84,8 +83,10 @@ class MapMdUtils:
         self.__table_name = "point_geometry"
         self.__header = [self.__quote_identifier(
             item) for item in next(self.read_csv())]
+        self.__not_found_count = 0
+        self.exception = None
 
-    def ___count_csv_lines(self):
+    def __count_csv_lines(self):
         """ Count CSV lines. """
         try:
             with open(self.__input_filename, 'r', encoding='utf-8') as csvfile:
@@ -101,12 +102,13 @@ class MapMdUtils:
         param line: Line to be written in CSV file.
         type line: str
         """
-        with open(self.__notfound_filename, mode='a') as csvfile:
+        with open(self.__notfound_filename, mode='a', newline='') as csvfile:
             csv_writter = csv.writer(
                 csvfile, delimiter=',',
                 quotechar='"', quoting=csv.QUOTE_MINIMAL)
             csv_writter.writerow(row)
 
+        self.__not_found_count += 1
         QgsMessageLog.logMessage(
             "Nu a fost geocodificat rândul CSV: %s" % ','.join(row),
             level=Qgis.Warning)
@@ -409,93 +411,120 @@ class MapMdUtils:
                 "Input CSV File",
                 "Bad CSV file - verify that your delimiters are consistent")
 
-    def geocode(self):
-        """ Geocode addresses using Map.md API."""
-        self.__init_spatialite_db()
+    def run(self):
+        """ Geocode addresses using Map.md API.
 
-        progressMessageBar = iface.messageBar().createMessage(
-            "Geocodificare adrese...")
-        progress = QProgressBar()
-        progress.setMaximum(self.___count_csv_lines())
-        progress.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-        progressMessageBar.layout().addWidget(progress)
-        iface.messageBar().pushWidget(progressMessageBar, Qgis.Info)
-        i = 0
+        return: Return bool type.
+        type: bool
+        """
+        QgsMessageLog.logMessage("Început geocodificare.", level=Qgis.Info)
+
+        # Se initializeaza baza de date SpatiaLite
+        self.__init_spatialite_db()
 
         pattern = r"^((?:[a-z0-9ăîșțâ]+[\., ]+)+)(\d{1,3}(?:[\/ ]?\w{1,2})?)$"
 
-        try:
-            if self.__street1_index == -1 and self.__locality_index == -1:
-                raise ValueError
+        if self.__street1_index == -1 and self.__locality_index == -1:
+            self.exception = Exception(
+                "Indicele câmpurilor street1 și/sau locality sunt goale!")
 
-            # Se omite primul rand, deoarece contine denumirile coloanelor
-            iter_rows = iter(self.read_csv())
-            next(iter_rows)
+        # Se omite primul rand, deoarece contine denumirile coloanelor
+        iter_rows = iter(self.read_csv())
+        next(iter_rows)
 
-            for row in iter_rows:
-                if not row[self.__street1_index] and \
-                        not row[self.__locality_index]:
+        for index, row in enumerate(iter_rows):
+            self.setProgress(index*100/self.__count_csv_lines())
+            # check isCanceled() to handle cancellation
+            if self.isCanceled():
+                return False
+
+            if not row[self.__street1_index] and \
+                    not row[self.__locality_index]:
+                self.__write_notfound_street_to_csv(row)
+
+            elif self.__street2_index > -1 and \
+                    row[self.__street2_index]:
+
+                QgsMessageLog.\
+                    logMessage("Street1 + Street2 + Locality",
+                               level=Qgis.Info)
+
+                geocode_street1_and_street2 = \
+                    self.__geocode_street1_and_street2(
+                        row,
+                        row[self.__street1_index],
+                        row[self.__street2_index])
+
+                if not geocode_street1_and_street2:
+                    continue
+
+            elif self.__house_number_index > -1 and \
+                    row[self.__house_number_index]:
+
+                QgsMessageLog.\
+                    logMessage("Street1 + House number + Locality",
+                               level=Qgis.Info)
+
+                geocode_street_and_house_number = \
+                    self.__geocode_street_and_house_number(
+                        row,
+                        row[self.__street1_index],
+                        row[self.__house_number_index])
+                if not geocode_street_and_house_number:
+                    continue
+
+            else:
+                QgsMessageLog.logMessage("Street1 + Locality",
+                                         level=Qgis.Info)
+                match = re.search(pattern,
+                                  row[self.__street1_index],
+                                  re.IGNORECASE | re.UNICODE)
+                if not match:
                     self.__write_notfound_street_to_csv(row)
+                    continue
 
-                elif self.__street2_index > -1 and \
-                        row[self.__street2_index]:
+                street = match.group(1).replace(',', '').strip()
+                house_number = match.group(2).strip()
 
-                    QgsMessageLog.\
-                        logMessage("Street1 + Street2 + Locality",
-                                   level=Qgis.Info)
+                geocode_street_and_house_number = \
+                    self.__geocode_street_and_house_number(
+                        row, street, house_number)
+                if not geocode_street_and_house_number:
+                    continue
 
-                    geocode_street1_and_street2 = \
-                        self.__geocode_street1_and_street2(
-                            row,
-                            row[self.__street1_index],
-                            row[self.__street2_index])
+        return True
 
-                    if not geocode_street1_and_street2:
-                        continue
-
-                elif self.__house_number_index > -1 and \
-                        row[self.__house_number_index]:
-
-                    QgsMessageLog.\
-                        logMessage("Street1 + House number + Locality",
-                                   level=Qgis.Info)
-
-                    geocode_street_and_house_number = \
-                        self.__geocode_street_and_house_number(
-                            row,
-                            row[self.__street1_index],
-                            row[self.__house_number_index])
-                    if not geocode_street_and_house_number:
-                        continue
-
-                else:
-                    QgsMessageLog.logMessage("Street1 + Locality",
-                                             level=Qgis.Info)
-                    match = re.search(pattern,
-                                      row[self.__street1_index],
-                                      re.IGNORECASE | re.UNICODE)
-                    if not match:
-                        self.__write_notfound_street_to_csv(row)
-                        continue
-
-                    street = match.group(1).replace(',', '').strip()
-                    house_number = match.group(2).strip()
-
-                    geocode_street_and_house_number = \
-                        self.__geocode_street_and_house_number(
-                            row, street, house_number)
-                    if not geocode_street_and_house_number:
-                        continue
-
-                i += 1
-                progress.setValue(i)
-
-            # Se goleste Message Bar
-            iface.messageBar().clearWidgets()
+    def finished(self, result):
+        """
+        This function is automatically called when the task has
+        completed (successfully or not).
+        You implement finished() to do whatever follow-up stuff
+        should happen after the task is complete.
+        finished is always called from the main thread, so it's safe
+        to do GUI operations and raise Python exceptions here.
+        result is the return value from self.run.
+        """
+        if result:
             # Se adauga stratul in QGIS
             self.__add_spatialite_layer_to_qgis()
 
-        except ValueError:
-            iface.messageBar().pushCritical(
-                "Eroare geocodificare",
-                "Localitatea și strada nu au fost selectate")
+            csv_row_count = self.__count_csv_lines()
+
+            QgsMessageLog.logMessage(
+                "Sfârșit geocodificare." +
+                "Au fost geocodificate %i din %i adrese." %
+                (csv_row_count-self.__not_found_count, csv_row_count),
+                level=Qgis.Success)
+        elif self.exception is None:
+            # Se adauga stratul in QGIS
+            self.__add_spatialite_layer_to_qgis()
+
+            QgsMessageLog.logMessage(
+                "Geocodificarea a fost anulată. " +
+                "Se afișează rezultatele obținute până la moment.",
+                level=Qgis.Warning)
+        else:
+            QgsMessageLog.logMessage(
+                "Procesul de geocodificare a returnat o excepție:\n%s" %
+                str(self.exception), level=Qgis.Critical)
+            raise self.exception
