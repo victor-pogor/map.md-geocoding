@@ -16,8 +16,8 @@ email=victor.pogor@outlook.com
 
 about=This plugin uses Map.md API for street geocoding. Thanks to Simpals company for providing free and unlimited API.
 
-tracker=https://github.com/victor-pogor/map.md-geo-tool/issues
-repository=https://github.com/victor-pogor/map.md-geo-tool
+tracker=https://github.com/victor-pogor/map.md-geocoding/issues
+repository=https://github.com/victor-pogor/map.md-geocoding
 # End of mandatory metadata
 
 # Recommended items:
@@ -28,7 +28,7 @@ repository=https://github.com/victor-pogor/map.md-geo-tool
 # Tags are comma separated with spaces allowed
 tags=python,map.md,point.md,point,simpals,qgis
 
-homepage=https://github.com/victor-pogor/map.md-geo-tool
+homepage=https://github.com/victor-pogor/map.md-geocoding
 category=Plugins
 icon=icon.png
 # experimental flag

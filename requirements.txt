@@ -1,9 +1,4 @@
 autopep8
 pb_tool
-nose
-pylint
-pyqt5
-requests
-rope
-shapely
-sphinx
+ptvsd
+sphinx_rtd_theme

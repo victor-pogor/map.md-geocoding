@@ -28,9 +28,7 @@ from PyQt5.QtCore import QSettings, QTranslator, qVersion, QCoreApplication
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QAction
 
-# pylint: disable=import-error
 from qgis.core import QgsApplication, QgsMessageLog
-# pylint: enable=import-error
 
 # Initialize Qt resources from file resources.py
 from .resources import *  # pylint: disable=wildcard-import,unused-wildcard-import
