@@ -30,15 +30,27 @@ Extensia Map.md Geocoding funcționează cu versiunea QGIS 3 și are următoarel
 * Nu blochează intefața utilizatorului, indicând în managerul de sarcini (Task Manager) al aplicației QGIS progresul de geocodificare;
 * Salvează rezultatele geocodificării în bază de date de tip SpatiaLite.
 
-## Cum să obțin o cheie API?
+## Cum să obțin o cheie API
 
 Pentru a utiliza serviciile API Map.md, este necesar să obțineți un cod unic de identificare. Pentru aceasta, trebuie să vă conectați la sistemul Simpals-ID, utilizând login-ul sau parola contului dvs. pentru oricare dintre proiectele companiei (de exemplu, 999.md sau point.md).
 
-Apoi, accesați link-ul [map.md/ro/api](map.md/ro/api) sau deschideți secțiunea „API” de pe site-ul [map.md](https://map.md), care se află în rubrica „Info”.
+Apoi, accesați link-ul [map.md/ro/api](map.md/ro/api) sau deschideți secțiunea "API" de pe site-ul [map.md](https://map.md), care se află în rubrica "Info".
 
-Apoi, după ce ați făcut click pe butonul „Obțineți codul”, completați formularul special. În câmpul „Website”, introduceți adresa URL a site-ului dvs. (mai bine să specificați doar numele de domeniu). În câmpurile iOS și Android, indicați numele aplicației. În continuare, salvați codul rezultat. Rețineți, codul stocat pentru un anumit nume de domeniu este valabil pentru toate adresele URL din interiorul acestuia și pentru numele de subdomenii speciale.
+Apoi, după ce ați făcut click pe butonul "Obțineți codul", completați formularul special. În câmpul "Website", introduceți adresa URL a site-ului dvs. (mai bine să specificați doar numele de domeniu). În câmpurile iOS și Android, indicați numele aplicației. În continuare, salvați codul rezultat. Rețineți, codul stocat pentru un anumit nume de domeniu este valabil pentru toate adresele URL din interiorul acestuia și pentru numele de subdomenii speciale.
 
 **Important!** Codul de identificare este generat numai de către proprietarul proiectului.
+
+## Procedura de development și debugging al extensiei
+
+Pentru un development și debugging cu succes este nevoie de urmat instrucțiunea următoare ce se referă la sistemul de operare Windows.
+
+1. Descărcați [OSGeo4W](https://qgis.org/en/site/forusers/download.html) de pe pagina oficială a aplicației QGIS și instalați-l pe calculatorul Dvs., selectând opțiunea *Desktop Express Install* în installer.
+
+2. Descărcați sau clonați repository-ul în mapa `%APPDATA%\QGIS\QGIS3\profiles\default\python\plugins\map_md_geocoding`.
+
+3. Instalați și rulați [Visual Studio Code](https://code.visualstudio.com/) prin intermediul fișierului `start_vscode.cmd`. Aceasta va seta toate variabilele de mediu necesare pentru rularea codului și pentru IntelliSense.
+
+4. Rulați aplicația QGIS și instalați extensiile *Plugin Reloader* și *debugvs*. Prima extensie va permite reinstalarea extensiei date fără repornirea aplicației QGIS. Extensia *debugvs* va permite debugging-ul direct in Visual Studio Code.
 
 ## Mulțumiri
 
