@@ -7,6 +7,7 @@ call "%OSGEO4W_ROOT%"\bin\py3_env.bat
 path %PATH%;%OSGEO4W_ROOT%\apps\qgis\bin
 path %PATH%;%OSGEO4W_ROOT%\apps\Qt5\bin
 path %PATH%;%OSGEO4W_ROOT%\apps\Python37\Scripts
+path %PATH%;C:\Program Files\7-Zip
 
 set PYTHONPATH=%PYTHONPATH%;%OSGEO4W_ROOT%\apps\qgis\python\
 set PYTHONPATH=%PYTHONPATH%;%OSGEO4W_ROOT%\apps\qgis\python\qgis

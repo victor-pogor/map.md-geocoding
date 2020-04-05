@@ -1,7 +1,7 @@
-.vscode/
 __pycache__/
 qgis-env/
 help/build/
+zip_build/
 
 apikey.txt
 command.bat
